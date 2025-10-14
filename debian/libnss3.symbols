@@ -26,6 +26,8 @@ libnss3.so libnss3 #MINVER#
  (symver)NSS_3.107 2:3.108
  (symver)NSS_3.110 2:3.110
  (symver)NSS_3.113 2:3.113
+ (symver)NSS_3.115 2:3.115
+ (symver)NSS_3.116 2:3.116
  (symver)NSS_3.11 2:3.13.4-2~
  (symver)NSS_3.11.1 2:3.13.4-2~
  (symver)NSS_3.11.2 2:3.13.4-2~
