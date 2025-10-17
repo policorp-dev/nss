@@ -99,7 +99,7 @@ CK_OBJECT_HANDLE pk11_FindObjectByTemplate(PK11SlotInfo *slot,
 CK_OBJECT_HANDLE *pk11_FindObjectsByTemplate(PK11SlotInfo *slot,
                                              CK_ATTRIBUTE *inTemplate, size_t tsize, int *objCount);
 
-#define PK11_GETTAB(x) ((CK_FUNCTION_LIST_3_0_PTR)((x)->functionList))
+#define PK11_GETTAB(x) ((CK_FUNCTION_LIST_3_2_PTR)((x)->functionList))
 #define PK11_SETATTRS(x, id, v, l) \
     (x)->type = (id);              \
     (x)->pValue = (v);             \
@@ -144,6 +144,7 @@ PRBool pk11_FindAttrInTemplate(CK_ATTRIBUTE *attr, unsigned int numAttrs,
                                CK_ATTRIBUTE_TYPE target);
 
 CK_MECHANISM_TYPE pk11_mapWrapKeyType(KeyType keyType);
+CK_MECHANISM_TYPE PK11_mapKemKeyType(KeyType keyType);
 PK11SymKey *pk11_KeyExchange(PK11SlotInfo *slot, CK_MECHANISM_TYPE type,
                              CK_ATTRIBUTE_TYPE operation, CK_FLAGS flags, PRBool isPerm,
                              PK11SymKey *symKey);
