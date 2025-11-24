@@ -1,3 +1,9 @@
+nss (2:3.117-Policorp-1) unstable; urgency=medium
+
+  * Updated in Policorp
+
+ -- Edson Juliano Drosdeck <edson@policorp.com.br>  Mon, 24 Nov 2025 17:04:50 +0000
+
 nss (2:3.117-1) unstable; urgency=medium
 
   * New upstream release.
