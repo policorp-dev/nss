@@ -28,6 +28,7 @@ libnss3.so libnss3 #MINVER#
  (symver)NSS_3.113 2:3.113
  (symver)NSS_3.115 2:3.115
  (symver)NSS_3.116 2:3.116
+ (symver)NSS_3.117 2:3.117
  (symver)NSS_3.11 2:3.13.4-2~
  (symver)NSS_3.11.1 2:3.13.4-2~
  (symver)NSS_3.11.2 2:3.13.4-2~
@@ -108,6 +109,7 @@ libnssutil3.so libnss3 #MINVER#
 * Build-Depends-Package: libnss3-dev
  (symver)NSSUTIL_3.101 2:3.101
  (symver)NSSUTIL_3.108 2:3.108
+ (symver)NSSUTIL_3.117 2:3.117
  (symver)NSSUTIL_3.12 2:3.13.4-2~
  (symver)NSSUTIL_3.12.3 2:3.13.4-2~
  (symver)NSSUTIL_3.12.5 2:3.13.4-2~

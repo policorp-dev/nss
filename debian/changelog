@@ -1,8 +1,16 @@
-nss (2:3.116-Policorp-1) unstable; urgency=medium
+nss (2:3.117-Policorp-1) unstable; urgency=medium
 
-  * Updated version in Policorp
+  * Updated in Policorp
 
- -- Edson Juliano Drodeck <edson@policorp.com.br>  Tue, 14 Oct 2025 18:24:34 +0000
+ -- Edson Juliano Drosdeck <edson@policorp.com.br>  Mon, 24 Nov 2025 17:04:50 +0000
+
+nss (2:3.117-1) unstable; urgency=medium
+
+  * New upstream release.
+  * debian/libnss3.symbols: Add NSS_3.117 and NSSUTIL_3.117 symbol
+    versions.
+
+ -- Mike Hommey <glandium@debian.org>  Wed, 15 Oct 2025 16:34:17 +0900
 
 nss (2:3.116-1) unstable; urgency=medium
 
