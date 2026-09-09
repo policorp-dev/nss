@@ -957,8 +957,8 @@ TEST_F(TlsExtensionTest13Stream, ResumeIncorrectBinderLength) {
       client_, [](TlsPreSharedKeyReplacer* r) {
         r->binders_[0].Write(r->binders_[0].len(), 0xff, 1);
       });
-  ConnectExpectAlert(server_, kTlsAlertIllegalParameter);
-  client_->CheckErrorCode(SSL_ERROR_ILLEGAL_PARAMETER_ALERT);
+  ConnectExpectAlert(server_, kTlsAlertDecodeError);
+  client_->CheckErrorCode(SSL_ERROR_DECODE_ERROR_ALERT);
   server_->CheckErrorCode(SSL_ERROR_RX_MALFORMED_CLIENT_HELLO);
 }
 
@@ -1314,6 +1314,9 @@ TEST_P(TlsDisallowedUnadvertisedExtensionTest13,
 
 TEST_P(TlsConnectStream, IncludePadding) {
   EnsureTlsSetup();
+  // filters only work with particular groups
+  client_->ConfigNamedGroups(kNonPQDHEGroups);
+
   SSL_EnableTls13GreaseEch(client_->ssl_fd(), PR_FALSE);  // Don't GREASE
 
   // This needs to be long enough to push a TLS 1.0 ClientHello over 255, but
@@ -1372,7 +1375,7 @@ TEST_F(TlsConnectStreamTls13, ClientHelloExtensionPermutationWithPSK) {
                             PR_TRUE) == SECSuccess);
   Connect();
   SendReceive();
-  CheckKeys(ssl_kea_ecdh, ssl_grp_ec_curve25519, ssl_auth_psk, ssl_sig_none);
+  CheckKeys(ssl_auth_psk, ssl_sig_none);
 }
 
 /* This test checks that the ClientHello extension order is actually permuted

@@ -964,7 +964,7 @@ sec_asn1d_check_and_subtract_length(unsigned long *remaining,
 {
     PORT_Assert(remaining);
     PORT_Assert(cx);
-    if (!remaining || !cx) {
+    if (!remaining) {
         PORT_SetError(SEC_ERROR_INVALID_ARGS);
         cx->status = decodeError;
         return PR_FALSE;
@@ -2533,8 +2533,10 @@ sec_asn1d_before_choice(sec_asn1d_state *state)
         state->dest = (char *)dest + state->theTemplate->offset;
     }
 
+    char *dest = state->dest ? (char *)state->dest - state->theTemplate->offset : NULL;
+
     child = sec_asn1d_push_state(state->top, state->theTemplate + 1,
-                                 (char *)state->dest - state->theTemplate->offset,
+                                 dest,
                                  PR_FALSE);
     if ((sec_asn1d_state *)NULL == child) {
         return (sec_asn1d_state *)NULL;
@@ -2585,7 +2587,7 @@ sec_asn1d_during_choice(sec_asn1d_state *state)
             return NULL;
         }
 
-        dest = (char *)child->dest - child->theTemplate->offset;
+        dest = child->dest ? (char *)child->dest - child->theTemplate->offset : NULL;
         child->theTemplate++;
 
         if (0 == child->theTemplate->kind) {
@@ -2594,7 +2596,7 @@ sec_asn1d_during_choice(sec_asn1d_state *state)
             state->top->status = decodeError;
             return (sec_asn1d_state *)NULL;
         }
-        child->dest = (char *)dest + child->theTemplate->offset;
+        child->dest = dest ? (char *)dest + child->theTemplate->offset : NULL;
 
         /* cargo'd from next_in_sequence innards */
         if (state->pending) {
@@ -2757,6 +2759,11 @@ SEC_ASN1DecoderUpdate(SEC_ASN1DecoderContext *cx,
     sec_asn1d_state *state = NULL;
     unsigned long consumed;
     SEC_ASN1EncodingPart what;
+
+    if (!cx) {
+        PORT_SetError(SEC_ERROR_INVALID_ARGS);
+        return SECFailure;
+    }
 
     if (cx->status == needBytes)
         cx->status = keepGoing;

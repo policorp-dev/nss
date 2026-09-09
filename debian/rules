@@ -154,8 +154,6 @@ override_dh_auto_install: $(PREPROCESSED_FILES)
 
 	install -m 644 -t debian/libnss3-dev/usr/include/nss \
 		$(DISTDIR)/public/nss/*
-	install -m 644 -t debian/libnss3-dev/usr/lib/$(DEB_HOST_MULTIARCH) \
-		$(DISTDIR)/lib/libcrmf.a
 	install -m 644 -t debian/libnss3-dev/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig debian/nss.pc
 	install -m 755 -t debian/libnss3-dev/usr/bin debian/nss-config
 
