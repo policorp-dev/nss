@@ -1547,16 +1547,6 @@ static const SSLSignatureScheme kSignatureSchemeRsaSha384[] = {
 static const SSLSignatureScheme kSignatureSchemeRsaSha256[] = {
     ssl_sig_rsa_pkcs1_sha256};
 
-static SSLNamedGroup NamedGroupForEcdsa384(const TlsConnectTestBase* ctbase) {
-  // NSS tries to match the group size to the symmetric cipher. In TLS 1.1 and
-  // 1.0, TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA is the highest priority suite, so
-  // we use P-384. With TLS 1.2 on we pick AES-128 GCM so use x25519.
-  if (ctbase->GetVersion() <= SSL_LIBRARY_VERSION_TLS_1_1) {
-    return ssl_grp_ec_secp384r1;
-  }
-  return ctbase->GetDefaultGroupFromKEA(ctbase->GetDefaultKEA());
-}
-
 // When signature algorithms match up, this should connect successfully; even
 // for TLS 1.1 and 1.0, where they should be ignored.
 TEST_P(TlsConnectGeneric, SignatureAlgorithmServerAuth) {
@@ -1566,8 +1556,7 @@ TEST_P(TlsConnectGeneric, SignatureAlgorithmServerAuth) {
   server_->SetSignatureSchemes(kSignatureSchemeEcdsaSha384,
                                PR_ARRAY_SIZE(kSignatureSchemeEcdsaSha384));
   Connect();
-  CheckKeys(GetDefaultKEA(), NamedGroupForEcdsa384(this), ssl_auth_ecdsa,
-            ssl_sig_ecdsa_secp384r1_sha384);
+  CheckKeys(ssl_auth_ecdsa, ssl_sig_ecdsa_secp384r1_sha384);
 }
 
 // Here the client picks a single option, which should work in all versions.
@@ -1585,8 +1574,7 @@ TEST_P(TlsConnectGeneric, SignatureAlgorithmClientOnly) {
             SSL_SignaturePrefSet(client_->ssl_fd(), clientAlgorithms,
                                  PR_ARRAY_SIZE(clientAlgorithms)));
   Connect();
-  CheckKeys(GetDefaultKEA(), NamedGroupForEcdsa384(this), ssl_auth_ecdsa,
-            ssl_sig_ecdsa_secp384r1_sha384);
+  CheckKeys(ssl_auth_ecdsa, ssl_sig_ecdsa_secp384r1_sha384);
 }
 
 // Here the server picks a single option, which should work in all versions.
@@ -1596,8 +1584,7 @@ TEST_P(TlsConnectGeneric, SignatureAlgorithmServerOnly) {
   server_->SetSignatureSchemes(kSignatureSchemeEcdsaSha384,
                                PR_ARRAY_SIZE(kSignatureSchemeEcdsaSha384));
   Connect();
-  CheckKeys(GetDefaultKEA(), NamedGroupForEcdsa384(this), ssl_auth_ecdsa,
-            ssl_sig_ecdsa_secp384r1_sha384);
+  CheckKeys(ssl_auth_ecdsa, ssl_sig_ecdsa_secp384r1_sha384);
 }
 
 // In TLS 1.2, curve and hash aren't bound together.
@@ -2539,5 +2526,27 @@ INSTANTIATE_TEST_SUITE_P(
                                          TlsAgent::kServerEcdsa384),
                        ::testing::Values(ssl_auth_ecdsa),
                        ::testing::Values(ssl_sig_ecdsa_sha1)));
+// ML-DSA is only allowed to be used in TLS 1.3 or greater
+INSTANTIATE_TEST_SUITE_P(
+    SignatureSchemeMlDsa44Tls13, TlsSignatureSchemeConfiguration,
+    ::testing::Combine(TlsConnectTestBase::kTlsVariantsAll,
+                       TlsConnectTestBase::kTlsV13,
+                       ::testing::Values(TlsAgent::kServerMlDsa44),
+                       ::testing::Values(ssl_auth_mldsa44),
+                       ::testing::Values(ssl_sig_mldsa44)));
+INSTANTIATE_TEST_SUITE_P(
+    SignatureSchemeMlDsa65Tls13, TlsSignatureSchemeConfiguration,
+    ::testing::Combine(TlsConnectTestBase::kTlsVariantsAll,
+                       TlsConnectTestBase::kTlsV13,
+                       ::testing::Values(TlsAgent::kServerMlDsa65),
+                       ::testing::Values(ssl_auth_mldsa65),
+                       ::testing::Values(ssl_sig_mldsa65)));
+INSTANTIATE_TEST_SUITE_P(
+    SignatureSchemeMlDsa87Tls13, TlsSignatureSchemeConfiguration,
+    ::testing::Combine(TlsConnectTestBase::kTlsVariantsAll,
+                       TlsConnectTestBase::kTlsV13,
+                       ::testing::Values(TlsAgent::kServerMlDsa87),
+                       ::testing::Values(ssl_auth_mldsa87),
+                       ::testing::Values(ssl_sig_mldsa87)));
 
 }  // namespace nss_test
