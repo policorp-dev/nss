@@ -13,6 +13,7 @@ import argparse
 import fnmatch
 import glob
 import io
+import json
 import logging
 import re
 import subprocess
@@ -29,6 +30,18 @@ from hashlib import sha256
 
 DEVNULL = open(os.devnull, "wb")
 cwd = os.path.dirname(os.path.abspath(__file__))
+
+
+def dist_dir():
+    """The build output directory: $DIST (as read by tests/all.sh), else
+    build.sh's default of ../dist."""
+    return os.path.abspath(os.environ.get("DIST") or os.path.join(cwd, "..", "dist"))
+
+
+def build_sh(args):
+    """Command line for build.sh, directed at dist_dir(). An explicit --dist
+    in args still wins, as build.sh takes the last one."""
+    return [os.path.join(cwd, "build.sh"), "--dist=" + dist_dir()] + args
 
 
 # --- Logging setup for coverage commands -------------------------------------
@@ -95,7 +108,9 @@ def run_tests(test=None, cycles="standard", env={}, silent=False, logfile=None):
     domsuf = os.getenv("DOMSUF", "localdomain")
     host = os.getenv("HOST", "localhost")
     env = env.copy()
-    env.update({"NSS_CYCLES": cycles, "DOMSUF": domsuf, "HOST": host})
+    env.update(
+        {"NSS_CYCLES": cycles, "DOMSUF": domsuf, "HOST": host, "DIST": dist_dir()}
+    )
     if test is not None:
         env["NSS_TESTS"] = test
     os_env = os.environ
@@ -254,7 +269,7 @@ class cfAction(argparse.Action):
 class buildAction(argparse.Action):
 
     def __call__(self, parser, args, values, option_string=None):
-        subprocess.check_call([cwd + "/build.sh"] + values)
+        subprocess.check_call(build_sh(values))
 
 
 class testAction(argparse.Action):
@@ -289,14 +304,15 @@ class covAction(argparse.Action):
         print("\nBuild with coverage sanitizers...\n")
         sancov_args = "edge,no-prune,trace-pc-guard,trace-cmp"
         subprocess.check_call(
-            [
-                os.path.join(cwd, "build.sh"),
-                "-c",
-                "--clang",
-                "--asan",
-                "--enable-legacy-db",
-                "--sancov=" + sancov_args,
-            ]
+            build_sh(
+                [
+                    "-c",
+                    "--clang",
+                    "--asan",
+                    "--enable-legacy-db",
+                    "--sancov=" + sancov_args,
+                ]
+            )
         )
 
         print("\nRun ssl_gtests to get a coverage report...")
@@ -317,7 +333,7 @@ class covAction(argparse.Action):
                 "-ignorelist=" + os.path.join(cwd, ".sancov-blacklist"),
                 "-symbolize",
                 sancov_file,
-                os.path.join(cwd, "../dist/Debug/bin/ssl_gtest"),
+                os.path.join(dist_dir(), "Debug", "bin", "ssl_gtest"),
             ],
             stdout=out,
         )
@@ -325,7 +341,7 @@ class covAction(argparse.Action):
 
         print("\nCopying ssl_gtests to artifacts...")
         shutil.copyfile(
-            os.path.join(cwd, "../dist/Debug/bin/ssl_gtest"),
+            os.path.join(dist_dir(), "Debug", "bin", "ssl_gtest"),
             os.path.join(outdir, "ssl_gtest"),
         )
 
@@ -718,10 +734,10 @@ class sourceCovAction(argparse.Action):
 
     def findDistDir(self):
         """Find the dist output directory via dist/latest."""
-        latest = os.path.join(cwd, "..", "dist", "latest")
+        latest = os.path.join(dist_dir(), "latest")
         with open(latest) as f:
             objdir = f.read().strip()
-        return os.path.join(cwd, "..", "dist", objdir)
+        return os.path.join(dist_dir(), objdir)
 
     @staticmethod
     def _is_elf(path):
@@ -779,9 +795,7 @@ class sourceCovAction(argparse.Action):
 
         # Build with source-based coverage instrumentation.
         cov_log.info("\nBuild with source-based coverage...\n")
-        subprocess.check_call(
-            [os.path.join(cwd, "build.sh"), "-c", "--clang", "--opt", "--sourcecov"]
-        )
+        subprocess.check_call(build_sh(["-c", "--clang", "--opt", "--sourcecov"]))
 
         # Run test suites.  If --test was given, run only that suite;
         # otherwise run all suites (uses defaults from tests/all.sh).
@@ -905,14 +919,15 @@ class fuzzCovAction(sourceCovAction):
         if not skip_build:
             cov_log.info("\nBuild with source-based coverage + fuzzing...\n")
             subprocess.check_call(
-                [
-                    os.path.join(cwd, "build.sh"),
-                    "-c",
-                    "--clang",
-                    "--sourcecov",
-                    "--fuzz",
-                    "--disable-tests",
-                ]
+                build_sh(
+                    [
+                        "-c",
+                        "--clang",
+                        "--sourcecov",
+                        "--fuzz",
+                        "--disable-tests",
+                    ]
+                )
             )
         else:
             cov_log.info("\nSkipping build (--skip-build).\n")
@@ -1140,6 +1155,10 @@ class tryAction(argparse.Action):
 
     TREEHERDER = "https://treeherder.mozilla.org/#/jobs?repo=nss-try&revision={}"
 
+    # Any Taskcluster deployment works for a dry run; the root URL is only
+    # needed so in-tree docker images can be looked up in the index.
+    ROOT_URL = "https://firefox-ci-tc.services.mozilla.com"
+
     @staticmethod
     def _hg_email():
         """Return the user's hg email from ui.username, or None."""
@@ -1168,11 +1187,20 @@ class tryAction(argparse.Action):
         if values and values[0] == "--":
             values = values[1:]
 
+        # --dry-run is a mach flag rather than try syntax, so pull it out
+        # before the rest is handed to the decision task's own parser.
+        dry_run = "--dry-run" in values
+        values = [v for v in values if v != "--dry-run"]
+
         if not values:
             parser.print_help()
             sys.exit(0)
 
         trysyntax = "try: " + " ".join(values)
+
+        if dry_run:
+            self._dry_run(trysyntax)
+            sys.exit(0)
 
         vcs = self._detect_vcs()
         if vcs == "hg":
@@ -1413,6 +1441,111 @@ class tryAction(argparse.Action):
                 file=sys.stderr,
             )
             sys.exit(1)
+
+    @staticmethod
+    def _taskgraph_pin():
+        """Return the taskgraph version the decision task runs, or None."""
+        try:
+            with open(os.path.join(cwd, ".taskcluster.yml")) as f:
+                match = re.search(
+                    r"mozillareleases/taskgraph:decision-v(\S+?)@", f.read()
+                )
+        except OSError:
+            return None
+        return match.group(1) if match else None
+
+    def _dry_run(self, trysyntax):
+        """Print the tasks the given try syntax would schedule.
+
+        This runs the same target-task filter the decision task runs, against
+        the working directory, so it reflects local changes to taskcluster/.
+        """
+        # nss_taskgraph lives beside the kind YAMLs rather than on sys.path.
+        sys.path.insert(0, os.path.join(cwd, "taskcluster"))
+        try:
+            from nss_taskgraph import parse_try_syntax
+            from taskgraph.main import main as taskgraph_main
+        except ImportError:
+            pin = self._taskgraph_pin()
+            print("Error: --dry-run requires the taskgraph package.", file=sys.stderr)
+            print("", file=sys.stderr)
+            print(
+                "  pip install taskcluster-taskgraph{}".format(
+                    "==" + pin if pin else ""
+                ),
+                file=sys.stderr,
+            )
+            print("", file=sys.stderr)
+            sys.exit(1)
+
+        # Exits with a usage message if the try syntax doesn't parse, which is
+        # the same thing the decision task would do -- just without the push.
+        try_options = parse_try_syntax(trysyntax)
+
+        print("Try syntax:")
+        print("  {}".format(trysyntax))
+        print()
+
+        # A decision task gets try_options from decision_parameters() and
+        # target_tasks_method from PER_PROJECT_PARAMETERS. Neither hook runs
+        # for a local `taskgraph target`, so pass both in explicitly.
+        parameters = {
+            "target_tasks_method": "nss_try_tasks",
+            "try_options": try_options,
+        }
+
+        os.environ.setdefault("TASKCLUSTER_ROOT_URL", self.ROOT_URL)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            parameters_path = os.path.join(tmpdir, "parameters.yml")
+            graph_path = os.path.join(tmpdir, "graph.json")
+            with open(parameters_path, "w") as f:
+                yaml.safe_dump(parameters, f)
+
+            # taskgraph resolves its config relative to the working directory.
+            oldcwd = os.getcwd()
+            os.chdir(cwd)
+            try:
+                taskgraph_main(
+                    ["target", "--json", "-p", parameters_path, "-o", graph_path]
+                )
+            except SystemExit as e:
+                if e.code:
+                    raise
+            finally:
+                os.chdir(oldcwd)
+
+            with open(graph_path) as f:
+                graph = json.load(f)
+
+        self._print_dry_run(graph)
+
+    @staticmethod
+    def _print_dry_run(graph):
+        rows = []
+        for label, task in graph.items():
+            extra = task.get("task", {}).get("extra", {})
+            treeherder = extra.get("treeherder", {})
+            symbol = treeherder.get("symbol", "?")
+            group = treeherder.get("groupSymbol")
+            if group:
+                symbol = "{}({})".format(group, symbol)
+            rows.append((extra.get("treeherder-platform", "-"), symbol, label))
+
+        if not rows:
+            print("No tasks match that try syntax.")
+            return
+
+        width = max(len(symbol) for _, symbol, _ in rows)
+        last_platform = None
+        for platform_, symbol, label in sorted(rows):
+            if platform_ != last_platform:
+                print("{}:".format(platform_))
+                last_platform = platform_
+            print("  {:<{w}}  {}".format(symbol, label, w=width))
+
+        print()
+        print("{} tasks.".format(len(rows)))
 
     def _print_treeherder(self, rev):
         print("Pushed {} to nss-try. Find it on Treeherder:".format(rev))
@@ -1664,6 +1797,10 @@ def parse_arguments():
         "  -t TOOL,...        {t} | all | none (default: none)\n"
         "  -e all             Enable extra builds (default: disabled)\n"
         "  --nspr-patch       Apply nspr.patch from the repo root before building\n"
+        "\n"
+        "mach flags:\n"
+        "  --dry-run          List the tasks the try syntax selects and exit\n"
+        "                     without pushing. Requires taskcluster-taskgraph.\n"
     ).format(p=_fmt(tc_platforms), u=_fmt(tc_tests), t=_fmt(tc_tools))
 
     parser_try = subparsers.add_parser(
