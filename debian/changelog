@@ -1,3 +1,15 @@
+nss (2:3.132-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Mike Hommey <glandium@debian.org>  Wed, 28 Oct 2026 15:11:44 +0900
+
+nss (2:3.131.1-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Mike Hommey <glandium@debian.org>  Thu, 22 Oct 2026 14:27:54 +0900
+
 nss (2:3.131-1) unstable; urgency=medium
 
   * New upstream release.
