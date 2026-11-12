@@ -128,6 +128,10 @@ tools_init()
   cp ${QADIR}/tools/pbmac1-invalid-bad-salt.p12 ${TOOLSDIR}/data
   cp ${QADIR}/tools/pbmac1-invalid-no-length.p12 ${TOOLSDIR}/data
   cp ${QADIR}/tools/corrupted_cert_bag.p12 ${TOOLSDIR}/data
+  cp ${QADIR}/tools/openssl-ed25519.p12 ${TOOLSDIR}/data
+  cp ${QADIR}/tools/openssl-ml-kem-512-seed.p12 ${TOOLSDIR}/data
+  cp ${QADIR}/tools/openssl-ml-kem-512-priv.p12 ${TOOLSDIR}/data
+  cp ${QADIR}/tools/openssl-ml-kem-512-both.p12 ${TOOLSDIR}/data
   cp ${QADIR}/tools/openssl-ml-kem-768-seed.p12 ${TOOLSDIR}/data
   cp ${QADIR}/tools/openssl-ml-kem-768-priv.p12 ${TOOLSDIR}/data
   cp ${QADIR}/tools/openssl-ml-kem-768-both.p12 ${TOOLSDIR}/data
@@ -569,10 +573,21 @@ tools_p12_import_rsa_pss_private_key()
   return $ret
 }
 
+tools_p12_import_ed25519_private_key()
+{
+  echo "$SCRIPTNAME: Importing ED25519 private key from PKCS#12 file --------------"
+  ${BINDIR}/pk12util -i ${TOOLSDIR}/data/openssl-ed25519.p12 -d ${P_R_COPYDIR} -k ${R_PWFILE} -W 'test' 2>&1
+  ret=$?
+  html_msg $ret 0 "Importing ED25519 private key from PKCS#12 file"
+  check_tmpfile
+
+  return $ret
+}
+
 tools_p12_ml_kem_import()
 {
   echo "$SCRIPTNAME: Testing ml-kem compatibility with pkcs12 --------------"
-  for i in 768 1024
+  for i in 512 768 1024
   do
     for j in 'seed' 'priv' 'both'
     do
@@ -680,6 +695,7 @@ tools_p12()
     tools_p12_import_rsa_pss_private_key
     tools_p12_ml_kem_import
     tools_p12_ml_dsa_import
+    tools_p12_import_ed25519_private_key
     tools_p12_policy
   fi
 }

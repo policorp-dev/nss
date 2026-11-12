@@ -176,7 +176,6 @@ const sslNamedGroupDef ssl_named_groups[] = {
     HYGROUP(secp256r1, mlkem768, 256, SECP256R1, MLKEM768, PR_TRUE),
     HYGROUP(secp384r1, mlkem1024, 256, SECP384R1, MLKEM1024, PR_TRUE),
     { ssl_grp_kem_mlkem1024, 256, ssl_kea_kem, SEC_OID_ML_KEM_1024, PR_TRUE },
-    { ssl_grp_kem_xyber768d00, 256, ssl_kea_ecdh_hybrid, SEC_OID_XYBER768D00, PR_FALSE },
     FFGROUP(2048),
     FFGROUP(3072),
     FFGROUP(4096),
@@ -4114,7 +4113,8 @@ ssl_NewKeyPair(SECKEYPrivateKey *privKey, SECKEYPublicKey *pubKey)
 sslKeyPair *
 ssl_GetKeyPairRef(sslKeyPair *keyPair)
 {
-    PR_ATOMIC_INCREMENT(&keyPair->refCount);
+    PRInt32 newCount = PR_ATOMIC_INCREMENT(&keyPair->refCount);
+    PORT_ReleaseAssert(newCount > 1);
     return keyPair;
 }
 
@@ -4126,6 +4126,7 @@ ssl_FreeKeyPair(sslKeyPair *keyPair)
     }
 
     PRInt32 newCount = PR_ATOMIC_DECREMENT(&keyPair->refCount);
+    PORT_ReleaseAssert(newCount >= 0);
     if (!newCount) {
         SECKEY_DestroyPrivateKey(keyPair->privKey);
         SECKEY_DestroyPublicKey(keyPair->pubKey);
@@ -4621,8 +4622,7 @@ SSLExp_SetResumptionToken(PRFileDesc *fd, const PRUint8 *token,
 
     // We override any previously set session.
     if (ss->sec.ci.sid) {
-        ssl_FreeSID(ss->sec.ci.sid);
-        ss->sec.ci.sid = NULL;
+        ssl_SetSocketSID(ss, NULL);
     }
 
     PRINT_BUF(50, (ss, "incoming resumption token", token, len));
@@ -4657,7 +4657,7 @@ SSLExp_SetResumptionToken(PRFileDesc *fd, const PRUint8 *token,
     sid->cached = in_external_cache;
     sid->lastAccessTime = ssl_Time(ss);
 
-    ss->sec.ci.sid = sid;
+    ssl_SetSocketSID(ss, sid);
 
     ssl_ReleaseSSL3HandshakeLock(ss);
     ssl_Release1stHandshakeLock(ss);
@@ -4705,7 +4705,19 @@ SSLExp_GetResumptionTokenInfo(const PRUint8 *tokenData, unsigned int tokenLen,
         return SECFailure;
     }
 
-    token.peerCert = CERT_DupCertificate(sid.peerCert);
+    /* |sid| only holds the peer certificate as DER; SSLResumptionTokenInfo is
+     * a public struct that hands out a CERTCertificate, so make one here. */
+    if (sid.peerCertDER.data) {
+        token.peerCert = CERT_NewTempCertificate(NULL, /* dbHandle */
+                                                 &sid.peerCertDER,
+                                                 NULL, PR_FALSE, PR_TRUE);
+        if (!token.peerCert) {
+            ssl_DestroySID(&sid, PR_FALSE);
+            return SECFailure;
+        }
+    } else {
+        token.peerCert = NULL;
+    }
 
     token.alpnSelectionLen = sid.u.ssl3.alpnSelection.len;
     token.alpnSelection = PORT_ZAlloc(token.alpnSelectionLen);
